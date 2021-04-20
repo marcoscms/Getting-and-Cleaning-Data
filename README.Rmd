@@ -1,0 +1,160 @@
+---
+title: "README"
+author: "Marcos"
+date: "20/04/2021"
+output: html_document
+---
+
+
+```{r, message = FALSE, warning = FALSE}
+library(readr)
+library(tidyverse)
+```
+
+## Step 1: Loading the data
+
+The content of the .txt files are loaded using the read_table function as follows:
+
+```{r, message=FALSE, warning=FALSE}
+
+# Test data
+
+test_set <- read_table(file = "data/UCI HAR Dataset/test/X_test.txt", col_names = F)
+test_label <- read_table(file = "data/UCI HAR Dataset/test/y_test.txt", col_names = F)
+
+
+# Train data
+
+train_set <- read_table(file = "data/UCI HAR Dataset/train/X_train.txt", col_names = F)
+train_label <- read_table(file = "data/UCI HAR Dataset/train/y_train.txt", col_names = F)
+
+
+# Activities labels
+
+act_labels <- read_table(file = "data/UCI HAR Dataset/activity_labels.txt", col_names = F)
+
+# Features
+
+features <- read_table(file = "data/UCI HAR Dataset/features.txt", col_names = F)
+
+
+```
+
+
+
+## Step 2: Tidying the data
+
+Firstly, the "features" data was cleaned by removing unecessary characters. Secondly, we defined the "features" data as column names for the data frame.Thirdly, we binded the "subject" data to the dataframe. Lastly, we extracted only columns containing the terms "mean" and "std", as it was demanded.
+
+```{r message=FALSE, warning=FALSE}
+
+# Naming columns
+features2 <- str_replace(string = features$X1, pattern = "^[0-9]+", replacement = "")
+colnames(test_set) <- features2
+colnames(train_set) <- features2
+
+#Adding train label
+
+test_set <- bind_cols(test_label, test_set)
+train_set <- bind_cols(train_label, train_set)
+
+
+# Adding subject train
+
+subject_train <- read_table(file = "data/UCI HAR Dataset/train/subject_train.txt", col_names = F)
+subject_test <- read_table(file = "data/UCI HAR Dataset/test/subject_test.txt", col_names = F)
+
+data_test <- bind_cols(subject_test, test_set)
+data_train <- bind_cols(subject_train, train_set)
+
+names(data_test)[1] <- "subject"
+names(data_train)[1] <- "subject"
+
+names(data_test)[2] <- "activity ID"
+names(data_train)[2] <- "activity ID"
+
+# Extracting only columns containing mean and std
+
+data_test_selected <- data_test %>%
+  select(contains("subject"),
+         contains("activity ID"),
+         contains("mean"),
+         contains("std"),
+         -contains("angle"))
+
+data_train_selected <- data_train %>%
+  select(contains("subject"),
+         contains("activity ID"),
+         contains("mean"),
+         contains("std"),
+         -contains("angle"))
+
+
+```
+
+## Step 3: Merging both dataframes
+
+In this part, we binded both "test" and "train" dataframes into a single one. Then, we merged the resulting dataset using the "inner_join" function, so that every observation would show its related "activity name". The key used was the "activity ID" number.
+
+```{r}
+
+# Merging both sets
+
+full_data_selected <- bind_rows(data_test_selected, data_train_selected)
+full_data_selected_2 <- inner_join(x = act_labels, y = full_data_selected, by = c("X1" = "activity ID"))
+
+names(full_data_selected_2)[1] <- "activity_id"
+names(full_data_selected_2)[2] <- "activity"
+
+head(full_data_selected_2)
+```
+
+
+## Step 4: Pivoting the dataframe
+
+Lastly, we transformed the "wide dataframe" into a "long format" using the pivot_longer function. The values of the observations now belong to the "measurement" column and each variable to the "variable" column. 
+
+```{r}
+
+# Pivoting the DF
+
+data_tidy <- full_data_selected_2 %>%
+  pivot_longer(cols = -c(activity_id, activity, subject),names_to = "variable", values_to = "measurement") %>%
+  select(subject, activity_id, activity, variable, measurement)
+
+head(data_tidy)
+
+```
+
+## Step 5: Calculating the average grouped by activity
+
+To calculate the average of the measurement by activity, we just need to use the group_by function:
+
+```{r, message=FALSE, warning=FALSE}
+
+# average of each variable grouped by activity
+
+average_by_act <- data_tidy %>%
+  group_by(activity, variable) %>%
+  summarize(average = mean(measurement))
+
+head(average_by_act)
+
+```
+
+
+
+## Step 6: Calculating the average grouped by subject
+
+```{r, message=FALSE, warning=FALSE}
+
+# average of each variable grouped by subject
+
+average_by_subject <- data_tidy %>%
+  group_by(subject, variable) %>%
+  summarize(average = mean(measurement))
+
+head(average_by_subject)
+
+```
+
